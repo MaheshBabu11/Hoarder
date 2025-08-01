@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 
 @Entity
-@Component
 @Hoarded
 @Table(name = "periodic_table")
 public class PeriodicTable {

@@ -2,116 +2,97 @@ package com.maheshbabu11.hoarder.core;
 
 import com.maheshbabu11.hoarder.annotation.Hoarded;
 import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
-import org.springframework.data.repository.CrudRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Id;
+import jakarta.persistence.metamodel.EntityType;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Component
 public class HoarderInitializer {
-    private static final Logger logger = LoggerFactory.getLogger(HoarderInitializer.class);
 
-    @Autowired
-    private ApplicationContext applicationContext;
+    private final EntityManager entityManager;
+
+    public HoarderInitializer(EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
 
     @PostConstruct
     public void init() {
-        logger.info("Initializing Hoarder cache...");
+        // Get all JPA entities from the EntityManager's metamodel
+        Set<EntityType<?>> entityTypes = entityManager.getMetamodel().getEntities();
 
-        // Get all repository beans
-        String[] repositoryBeanNames = applicationContext.getBeanNamesForType(CrudRepository.class);
+        for (EntityType<?> entityType : entityTypes) {
+            Class<?> javaType = entityType.getJavaType();
 
-        for (String repoName : repositoryBeanNames) {
-            CrudRepository<?, ?> repository = (CrudRepository<?, ?>) applicationContext.getBean(repoName);
+            // Check if this entity is annotated with @Hoarded
+            if (javaType.isAnnotationPresent(Hoarded.class)) {
+                System.out.println("Found hoarded entity: " + javaType.getSimpleName());
+                preloadEntity(javaType);
+            }
+        }
+    }
 
-            // Find the entity class for this repository
-            Class<?> entityClass = findEntityClass(repository.getClass());
-            if (entityClass == null) {
-                continue;
+    private void preloadEntity(Class<?> clazz) {
+        try {
+            String jpql = "SELECT e FROM " + clazz.getSimpleName() + " e";
+            System.out.println("Preloading entities for class: " + clazz.getSimpleName());
+
+            List<?> result = entityManager.createQuery(jpql, clazz).getResultList();
+            Method idGetter = findIdGetter(clazz);
+
+            if (idGetter == null) {
+                System.err.println("ID getter not found for class: " + clazz.getSimpleName());
+                return;
             }
 
-            // Check if the entity is annotated with @Hoarded
-            if (!entityClass.isAnnotationPresent(Hoarded.class)) {
-                logger.debug("Entity {} is not annotated with @Hoarded, skipping", entityClass.getName());
-                continue;
-            }
-
-            logger.info("Preloading entities for class: {}", entityClass.getName());
-
-            try {
-                // Find the ID field
-                Field idField = findIdField(entityClass);
-                if (idField == null) {
-                    logger.warn("No @Id field found in class {}, skipping", entityClass.getName());
-                    continue;
+            HoarderCache.preload(clazz, result, entity -> {
+                try {
+                    return idGetter.invoke(entity);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to invoke ID getter for entity: " + clazz.getSimpleName(), e);
                 }
+            });
 
-                // Get the getter method for the ID field
-                String getterName = "get" + Character.toUpperCase(idField.getName().charAt(0)) + idField.getName().substring(1);
-                Method getter = entityClass.getMethod(getterName);
+            System.out.println("Successfully preloaded " + result.size() + " entities for class: " + clazz.getSimpleName());
 
-                // Load all entities using the repository
-                Iterable<?> entities = repository.findAll();
-                List<Object> entityList = new ArrayList<>();
-                entities.forEach(entityList::add);
+        } catch (Exception e) {
+            System.err.println("Failed to preload entities for class: " + clazz.getSimpleName() + ", Error: " + e.getMessage());
+        }
+    }
 
-                // Cache all entities
-                HoarderCache.preload(entityClass, entityList, entity -> {
-                    try {
-                        return getter.invoke(entity);
-                    } catch (Exception e) {
-                        logger.error("Failed to extract ID from entity", e);
-                        return null;
-                    }
-                });
-
-                logger.info("Preloaded {} entities of type {}", entityList.size(), entityClass.getName());
-            } catch (Exception e) {
-                logger.error("Failed to preload entities of type " + entityClass.getName(), e);
+    private Method findIdGetter(Class<?> clazz) {
+        // First, check methods for @Id annotation (method-level JPA annotation)
+        for (Method method : clazz.getMethods()) {
+            if (method.isAnnotationPresent(Id.class)) {
+                return method;
             }
         }
 
-        logger.info("Hoarder cache initialization complete");
-    }
+        // Then, check fields for @Id annotation and find corresponding getter
+        for (Field field : clazz.getDeclaredFields()) {
+            if (field.isAnnotationPresent(Id.class)) {
+                String fieldName = field.getName();
+                String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
 
-    private Field findIdField(Class<?> entityClass) {
-        for (Field field : entityClass.getDeclaredFields()) {
-            if (field.isAnnotationPresent(jakarta.persistence.Id.class)) {
-                field.setAccessible(true);
-                return field;
-            }
-        }
-        return null;
-    }
-
-    private Class<?> findEntityClass(Class<?> repoClass) {
-        // Check interfaces
-        for (Type genericInterface : repoClass.getGenericInterfaces()) {
-            if (genericInterface instanceof ParameterizedType pt) {
-                Type rawType = pt.getRawType();
-                if (rawType instanceof Class &&
-                        (CrudRepository.class.isAssignableFrom((Class<?>) rawType))) {
-                    Type[] typeArgs = pt.getActualTypeArguments();
-                    if (typeArgs.length > 0 && typeArgs[0] instanceof Class) {
-                        return (Class<?>) typeArgs[0];
+                try {
+                    return clazz.getMethod(getterName);
+                } catch (NoSuchMethodException e) {
+                    // Try boolean getter pattern (isXxx for boolean fields)
+                    if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+                        String booleanGetterName = "is" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+                        try {
+                            return clazz.getMethod(booleanGetterName);
+                        } catch (NoSuchMethodException ignored) {
+                            // Continue to next field
+                        }
                     }
                 }
             }
-        }
-
-        // Check superclasses recursively
-        Class<?> superclass = repoClass.getSuperclass();
-        if (superclass != null && superclass != Object.class) {
-            return findEntityClass(superclass);
         }
 
         return null;

@@ -27,5 +27,30 @@ public class HoarderCache {
     public static boolean isCached(Class<?> clazz) {
         return CACHE.containsKey(clazz);
     }
+
+    public static void clear() {
+        CACHE.clear();
+    }
+
+    public static void printCacheStatus() {
+        System.out.println("Current Hoarder Cache Status:");
+        for (Map.Entry<Class<?>, Map<Object, Object>> entry : CACHE.entrySet()) {
+            Class<?> clazz = entry.getKey();
+            Map<Object, Object> entityMap = entry.getValue();
+            System.out.println("Class: " + clazz.getSimpleName() + ", Cached Entities: " + entityMap.size());
+        }
+    }
+
+    public static void printCacheDetails() {
+        System.out.println("Hoarder Cache Details:");
+        for (Map.Entry<Class<?>, Map<Object, Object>> entry : CACHE.entrySet()) {
+            Class<?> clazz = entry.getKey();
+            Map<Object, Object> entityMap = entry.getValue();
+            System.out.println("Class: " + clazz.getSimpleName() + ", Cached Entities: " + entityMap.size());
+            for (Map.Entry<Object, Object> entityEntry : entityMap.entrySet()) {
+                System.out.println("  ID: " + entityEntry.getKey() + ", Entity: " + entityEntry.getValue());
+            }
+        }
+    }
 }
 
