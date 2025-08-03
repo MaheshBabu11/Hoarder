@@ -120,6 +120,33 @@ public class ElementService {
 }
 ```
 
+## Advanced Configuration
+
+### Selective Column Caching with @HoardedColumn
+
+By default, Hoarder caches entities by their primary key. To enable caching by specific columns, use the
+`@HoardedColumn` annotation on fields you want to cache:
+
+```java
+
+@Entity
+@Hoarded
+public class Element {
+    @Id
+    private Long atomicNumber;
+
+    @HoardedColumn
+    private String element;
+
+    @HoardedColumn
+    private String symbol;
+
+    private String discoverer; // Not cached by column
+
+    // ... other fields and methods
+}
+```
+
 ## How it Works
 
 - **Entity Registration**: On application startup, Hoarder scans for entities annotated with `@Hoarded`.
@@ -127,6 +154,14 @@ public class ElementService {
 - **Method Interception**: AOP aspects intercept repository method calls to cache results.
 - **Cache Lookup**: For supported methods, Hoarder first checks the cache.
 - **Fallback**: If the entity is not found in the cache, the query proceeds to
+
+## How column caching works
+
+When you annotate fields with `@HoardedColumn`, Hoarder will:
+
+- Cache by Primary Key: Always enabled for `@Hoarded` entities.
+- Cache by Annotated Columns: Creates additional cache entries for fields marked with `@HoardedColumn`.
+- Intercept Repository Methods: Automatically handles `findBy*` and `findAllBy*` methods for cached columns.
 
 ## Supported Method Patterns
 
@@ -211,6 +246,7 @@ When cache refresh is enabled:
 You can also manually manage the cache using the HoarderCache bean:
 
 ```java
+
 @Autowired
 private HoarderCache hoarderCache;
 
@@ -218,13 +254,60 @@ private HoarderCache hoarderCache;
 hoarderCache.clear();
 
 // Clear cache for a specific entity
-hoarderCache.clearForEntity(Element.class);
+hoarderCache.clearForEntity(Element .class);
 
 // Check cache status
 hoarderCache.printCacheStatus();
 
 // View detailed cache contents
 hoarderCache.printCacheDetails();
+```
+
+## Cache Analysis
+
+Hoarder provides built-in cache analysis capabilities to monitor cache performance and memory usage.
+
+### Cache Size Information
+
+You can get detailed information about cache sizes using the HoarderCache component:
+
+```java
+
+@Autowired
+private HoarderCache hoarderCache;
+
+// Get cache size 
+hoarderCache.getCacheSize();
+```
+
+### Example Output
+
+When you call `hoarderCache.printCacheDetails()`, it will output something like this:
+
+```plaintext
+========== Cache Size Analysis ==========
+Entity: Element
+Primary Key Cache: 118 entries
+Column Caches:
+- Symbol: 118 entries
+- Element: 118 entries
+- Type: 118 entries
+Total Cache Entries: 472
+Estimated Memory Usage: ~47.2 KB
+
+Entity: User
+Primary Key Cache: 1,543 entries
+Column Caches:
+- username: 1,543 entries
+- email: 1,543 entries
+Total Cache Entries: 4,629
+Estimated Memory Usage: ~462.9 KB
+
+========================================
+Total Entities Cached: 2
+Total Cache Entries: 5,101
+Total Estimated Memory Usage: ~510.1 KB
+========================================
 ```
 
 ## Best Practices

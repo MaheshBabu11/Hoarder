@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -105,6 +106,119 @@ public class HoarderAspect {
     }
 
     return result;
+  }
+
+  @Around("execution(* org.springframework.data.repository.Repository+.findBy*(..))")
+  public Object interceptFindByColumn(ProceedingJoinPoint pjp) throws Throwable {
+    if (!hoarderProperties.getCache().isEnabled()) {
+      return pjp.proceed();
+    }
+
+    String methodName = pjp.getSignature().getName();
+    Object[] args = pjp.getArgs();
+    Object target = pjp.getTarget();
+    String entityClassName = getEntityClassName(target);
+
+    // Skip findById as it's handled by another interceptor
+    if ("findById".equals(methodName)) {
+      return pjp.proceed();
+    }
+
+    Class<?> entityClass = hoardedEntityCache.get(entityClassName);
+    if (entityClass == null) {
+      hoarderLogger.debug(
+          HoarderAspect.class, "No hoarded entity found for class: {}", entityClassName);
+      return pjp.proceed();
+    }
+
+    // Extract column name from method name
+    String columnName = extractColumnName(methodName);
+    if (columnName == null || args.length == 0) {
+      hoarderLogger.debug(
+          HoarderAspect.class, "Cannot extract column name from method: {}", methodName);
+      return pjp.proceed();
+    }
+
+    Object columnValue = args[0];
+
+    // Check if this column is cached
+    if (!hoarderCache.isColumnCached(entityClass, columnName)) {
+      hoarderLogger.debug(
+          HoarderAspect.class, "Column {} not cached for class: {}", columnName, entityClassName);
+      return pjp.proceed();
+    }
+
+    hoarderLogger.debug(
+        HoarderAspect.class,
+        "Intercepted {} call for entity class: {} with value: {}",
+        methodName,
+        entityClassName,
+        columnValue);
+
+    if (methodName.startsWith("findAllBy")) {
+      List<?> cached = hoarderCache.getAllByColumn(entityClass, columnName, columnValue);
+      if (!cached.isEmpty()) {
+        hoarderLogger.debug(
+            HoarderAspect.class,
+            "Returning cached entities for {}.{} with value: {}",
+            entityClassName,
+            columnName,
+            columnValue);
+        return cached;
+      }
+    } else if (methodName.startsWith("findBy")) {
+      Optional<?> cached = hoarderCache.getByColumn(entityClass, columnName, columnValue);
+      if (cached.isPresent()) {
+        hoarderLogger.debug(
+            HoarderAspect.class,
+            "Returning cached entity for {}.{} with value: {}",
+            entityClassName,
+            columnName,
+            columnValue);
+        return cached;
+      }
+    }
+
+    hoarderLogger.debug(
+        HoarderAspect.class,
+        "No cached entity found, executing database query for {}.{} with value: {}",
+        entityClassName,
+        columnName,
+        columnValue);
+
+    Object result = pjp.proceed();
+
+    // Cache the result
+    if (result instanceof Optional<?> opt && opt.isPresent()) {
+      hoarderCache.putByColumn(entityClass, columnName, columnValue, opt.get());
+      hoarderLogger.debug(
+          HoarderAspect.class,
+          "Cached entity for {}.{} with value: {}",
+          entityClassName,
+          columnName,
+          columnValue);
+    } else if (result instanceof List<?> list && !list.isEmpty()) {
+      // For list results, cache the first entity (assuming unique columns)
+      Object firstEntity = list.get(0);
+      hoarderCache.putByColumn(entityClass, columnName, columnValue, firstEntity);
+      hoarderLogger.debug(
+          HoarderAspect.class,
+          "Cached first entity from list for {}.{} with value: {}",
+          entityClassName,
+          columnName,
+          columnValue);
+    }
+
+    return result;
+  }
+
+  private String extractColumnName(String methodName) {
+    if (methodName.startsWith("findBy")) {
+      return methodName.substring(6); // Remove "findBy"
+    } else if (methodName.startsWith("findAllBy")) {
+      return methodName.substring(9); // Remove "findAllBy"
+    }
+    return null;
   }
 
   private String getEntityClassName(Object repository) {
