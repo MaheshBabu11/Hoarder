@@ -225,7 +225,7 @@ public class HoarderCache {
         .map(classCache -> classCache.get(columnName));
   }
 
-  private void getCacheSize() {
+  public void getCacheSize() {
     cacheAnalyzer.printCacheSizes();
     hoarderLogger.info(HoarderCache.class, "Cache size analysis completed.");
   }

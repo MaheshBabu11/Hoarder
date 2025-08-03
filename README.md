@@ -24,14 +24,14 @@ reducing database queries.
 <dependency>
     <groupId>com.github.hoarder</groupId>
     <artifactId>hoarder-spring-boot-starter</artifactId>
-    <version>0.0.4</version>
+    <version>0.0.6</version>
 </dependency>
 ```
 
 ### Gradle
 
 ```groovy
-implementation 'com.github.hoarder:hoarder-spring-boot-starter:0.0.4'
+implementation 'com.github.hoarder:hoarder-spring-boot-starter:0.0.6'
 ```
 
 Add this to your `pom.xml` or `build.gradle` file to include the Hoarder Spring Boot Starter in your project.
