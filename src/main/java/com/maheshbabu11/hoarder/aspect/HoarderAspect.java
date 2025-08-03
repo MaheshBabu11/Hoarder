@@ -62,7 +62,7 @@ public class HoarderAspect {
         HoarderAspect.class, "Initialized {} hoarded entities", hoardedEntityCache.size());
   }
 
-  @Around("execution(* org.springframework.data.repository.CrudRepository+.findById(..))")
+  @Around("execution(* org.springframework.data.repository.Repository+.findById(..))")
   public Object interceptFindById(ProceedingJoinPoint pjp) throws Throwable {
     if (!hoarderProperties.getCache().isEnabled()) {
       return pjp.proceed();
