@@ -1,56 +1,97 @@
 package com.maheshbabu11.hoarder.core;
 
+import com.maheshbabu11.hoarder.config.HoarderProperties;
+import com.maheshbabu11.hoarder.util.HoarderLogger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+@Component
 public class HoarderCache {
-    private static final Map<Class<?>, Map<Object, Object>> CACHE = new ConcurrentHashMap<>();
+  private static final Map<Class<?>, Map<Object, Object>> CACHE = new ConcurrentHashMap<>();
+  private final HoarderProperties properties;
+  private final HoarderLogger hoarderLogger;
 
-    public static <T> void preload(Class<?> clazz, List<?> records, Function<Object, Object> idExtractor) {
-        Map<Object, Object> entityMap = CACHE.computeIfAbsent(clazz, k -> new ConcurrentHashMap<>());
-        for (Object record : records) {
-            entityMap.put(idExtractor.apply(record), record);
-        }
-    }
+  public HoarderCache(HoarderProperties properties, HoarderLogger hoarderLogger) {
+    this.properties = properties;
+    this.hoarderLogger = hoarderLogger;
+  }
 
-    @SuppressWarnings("unchecked")
-    public static <T> Optional<T> get(Class<T> clazz, Object id) {
-        return Optional.ofNullable((T) CACHE.getOrDefault(clazz, Collections.emptyMap()).get(id));
-    }
+  public <T> void preload(Class<?> clazz, List<?> records, Function<Object, Object> idExtractor) {
+    if (!properties.getCache().isEnabled()) return;
 
-    public static <T> void put(Class<?> clazz, Object id, T entity) {
-        CACHE.computeIfAbsent(clazz, k -> new ConcurrentHashMap<>()).put(id, entity);
+    Map<Object, Object> entityMap = CACHE.computeIfAbsent(clazz, k -> new ConcurrentHashMap<>());
+    for (Object record : records) {
+      entityMap.put(idExtractor.apply(record), record);
     }
+  }
 
-    public static boolean isCached(Class<?> clazz) {
-        return CACHE.containsKey(clazz);
-    }
+  @SuppressWarnings("unchecked")
+  public <T> Optional<T> get(Class<T> clazz, Object id) {
+    if (!properties.getCache().isEnabled()) return Optional.empty();
+    return Optional.ofNullable((T) CACHE.getOrDefault(clazz, Collections.emptyMap()).get(id));
+  }
 
-    public static void clear() {
-        CACHE.clear();
-    }
+  public <T> void put(Class<?> clazz, Object id, T entity) {
+    if (!properties.getCache().isEnabled()) return;
+    CACHE.computeIfAbsent(clazz, k -> new ConcurrentHashMap<>()).put(id, entity);
+  }
 
-    public static void printCacheStatus() {
-        System.out.println("Current Hoarder Cache Status:");
-        for (Map.Entry<Class<?>, Map<Object, Object>> entry : CACHE.entrySet()) {
-            Class<?> clazz = entry.getKey();
-            Map<Object, Object> entityMap = entry.getValue();
-            System.out.println("Class: " + clazz.getSimpleName() + ", Cached Entities: " + entityMap.size());
-        }
-    }
+  public boolean isCached(Class<?> clazz) {
+    return properties.getCache().isEnabled() && CACHE.containsKey(clazz);
+  }
 
-    public static void printCacheDetails() {
-        System.out.println("Hoarder Cache Details:");
-        for (Map.Entry<Class<?>, Map<Object, Object>> entry : CACHE.entrySet()) {
-            Class<?> clazz = entry.getKey();
-            Map<Object, Object> entityMap = entry.getValue();
-            System.out.println("Class: " + clazz.getSimpleName() + ", Cached Entities: " + entityMap.size());
-            for (Map.Entry<Object, Object> entityEntry : entityMap.entrySet()) {
-                System.out.println("  ID: " + entityEntry.getKey() + ", Entity: " + entityEntry.getValue());
-            }
-        }
+  public void clear() {
+    CACHE.clear();
+  }
+
+  public void printCacheStatus() {
+    hoarderLogger.info(
+        HoarderCache.class,
+        "Current Hoarder Cache Status (Enabled: {}):",
+        properties.getCache().isEnabled());
+    if (CACHE.isEmpty()) {
+      hoarderLogger.info(HoarderCache.class, "Cache is empty.");
+      return;
     }
+    for (Map.Entry<Class<?>, Map<Object, Object>> entry : CACHE.entrySet()) {
+      Class<?> clazz = entry.getKey();
+      Map<Object, Object> entityMap = entry.getValue();
+      hoarderLogger.info(
+          HoarderCache.class,
+          "Class: {}, Cached Entities: {}",
+          clazz.getSimpleName(),
+          entityMap.size());
+    }
+  }
+
+  public void printCacheDetails() {
+    hoarderLogger.info(
+        HoarderCache.class,
+        "Hoarder Cache Details (Enabled: {}):",
+        properties.getCache().isEnabled());
+    for (Map.Entry<Class<?>, Map<Object, Object>> entry : CACHE.entrySet()) {
+      Class<?> clazz = entry.getKey();
+      Map<Object, Object> entityMap = entry.getValue();
+      hoarderLogger.info(
+          HoarderCache.class,
+          "Class: {}, Cached Entities: {}",
+          clazz.getSimpleName(),
+          entityMap.size());
+      for (Map.Entry<Object, Object> entityEntry : entityMap.entrySet()) {
+        hoarderLogger.debug(
+            HoarderCache.class,
+            "  ID: {}, Entity: {}",
+            entityEntry.getKey(),
+            entityEntry.getValue());
+      }
+    }
+  }
+
+  public HoarderProperties getProperties() {
+    return properties;
+  }
 }
-
