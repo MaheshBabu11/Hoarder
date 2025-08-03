@@ -17,41 +17,41 @@ public class HoarderLogger {
 
   public void info(Class<?> clazz, String message, Object... args) {
     if (isLoggingEnabled()
-        && isLevelEnabled(HoarderProperties.LogLevel.INFO)
-        && logger.isInfoEnabled()) {
-      logger.info("[{}] {}", formatArgs(clazz, args), message);
+            && isLevelEnabled(HoarderProperties.LogLevel.INFO)
+            && logger.isInfoEnabled()) {
+      logger.info("[{}] " + message, formatArgs(clazz, args));
     }
   }
 
   public void debug(Class<?> clazz, String message, Object... args) {
     if (isLoggingEnabled()
-        && isLevelEnabled(HoarderProperties.LogLevel.DEBUG)
-        && logger.isDebugEnabled()) {
-      logger.debug("[{}] {}", formatArgs(clazz, args), message);
+            && isLevelEnabled(HoarderProperties.LogLevel.DEBUG)
+            && logger.isDebugEnabled()) {
+      logger.debug("[{}] " + message, formatArgs(clazz, args));
     }
   }
 
   public void trace(Class<?> clazz, String message, Object... args) {
     if (isLoggingEnabled()
-        && isLevelEnabled(HoarderProperties.LogLevel.TRACE)
-        && logger.isTraceEnabled()) {
-      logger.trace("[{}] {}", formatArgs(clazz, args), message);
+            && isLevelEnabled(HoarderProperties.LogLevel.TRACE)
+            && logger.isTraceEnabled()) {
+      logger.trace("[{}] " + message, formatArgs(clazz, args));
     }
   }
 
   public void warn(Class<?> clazz, String message, Object... args) {
     if (isLoggingEnabled()
-        && isLevelEnabled(HoarderProperties.LogLevel.WARN)
-        && logger.isWarnEnabled()) {
-      logger.warn("[{}] {}", formatArgs(clazz, args), message);
+            && isLevelEnabled(HoarderProperties.LogLevel.WARN)
+            && logger.isWarnEnabled()) {
+      logger.warn("[{}] " + message, formatArgs(clazz, args));
     }
   }
 
   public void error(Class<?> clazz, String message, Object... args) {
     if (isLoggingEnabled()
-        && isLevelEnabled(HoarderProperties.LogLevel.ERROR)
-        && logger.isErrorEnabled()) {
-      logger.error("[{}] {}", formatArgs(clazz, args), message);
+            && isLevelEnabled(HoarderProperties.LogLevel.ERROR)
+            && logger.isErrorEnabled()) {
+      logger.error("[{}] " + message, formatArgs(clazz, args));
     }
   }
 
