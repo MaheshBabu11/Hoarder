@@ -4,6 +4,7 @@ import com.maheshbabu11.hoarder.annotation.Hoarded;
 import com.maheshbabu11.hoarder.config.HoarderProperties;
 import com.maheshbabu11.hoarder.util.HoarderLogger;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Id;
 import jakarta.persistence.metamodel.EntityType;
@@ -13,6 +14,11 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
 @Component
 public class HoarderInitializer {
@@ -21,6 +27,8 @@ public class HoarderInitializer {
   private final HoarderProperties hoarderProperties;
   private final HoarderLogger hoarderLogger;
   private final HoarderCache hoarderCache;
+  private final Map<Class<?>, Method> idGetterCache = new ConcurrentHashMap<>();
+  private ScheduledExecutorService refreshScheduler;
 
   public HoarderInitializer(
       EntityManager entityManager,
@@ -52,6 +60,118 @@ public class HoarderInitializer {
         preloadEntity(javaType);
       }
     }
+
+    if (hoarderProperties.getCache().getRefresh().isEnabled()) {
+      startCacheRefreshScheduler();
+    }
+  }
+
+  @PreDestroy
+  public void destroy() {
+    if (refreshScheduler != null && !refreshScheduler.isShutdown()) {
+      hoarderLogger.info(HoarderInitializer.class, "Shutting down cache refresh scheduler");
+      refreshScheduler.shutdown();
+      try {
+        if (!refreshScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+          refreshScheduler.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        refreshScheduler.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+
+  private void startCacheRefreshScheduler() {
+    refreshScheduler =
+        Executors.newSingleThreadScheduledExecutor(
+            r -> {
+              Thread t = new Thread(r, "hoarder-cache-refresh");
+              t.setDaemon(true);
+              return t;
+            });
+
+    long delayMinutes = hoarderProperties.getCache().getRefresh().getDelayMinutes();
+    long intervalMinutes = hoarderProperties.getCache().getRefresh().getIntervalMinutes();
+
+    hoarderLogger.info(
+        HoarderInitializer.class,
+        "Starting cache refresh scheduler with delay: {} minutes, interval: {} minutes",
+        delayMinutes,
+        intervalMinutes);
+
+    refreshScheduler.scheduleAtFixedRate(
+        this::refreshAllCachedEntities, delayMinutes, intervalMinutes, TimeUnit.MINUTES);
+  }
+
+  private void refreshAllCachedEntities() {
+    hoarderLogger.info(HoarderInitializer.class, "Starting scheduled cache refresh");
+
+    try {
+      Set<EntityType<?>> entityTypes = entityManager.getMetamodel().getEntities();
+
+      for (EntityType<?> entityType : entityTypes) {
+        Class<?> javaType = entityType.getJavaType();
+
+        if (javaType.isAnnotationPresent(Hoarded.class) && hoarderCache.isCached(javaType)) {
+          hoarderLogger.debug(
+              HoarderInitializer.class,
+              "Refreshing cached entities for: {}",
+              javaType.getSimpleName());
+          refreshEntity(javaType);
+        }
+      }
+
+      hoarderLogger.info(HoarderInitializer.class, "Completed scheduled cache refresh");
+    } catch (Exception e) {
+      hoarderLogger.error(
+          HoarderInitializer.class, "Error during scheduled cache refresh: {}", e.getMessage());
+    }
+  }
+
+  private void refreshEntity(Class<?> clazz) {
+    try {
+      String jpql = "SELECT e FROM " + clazz.getSimpleName() + " e";
+      List<?> result = entityManager.createQuery(jpql, clazz).getResultList();
+
+      Method idGetter = idGetterCache.computeIfAbsent(clazz, this::findIdGetter);
+
+      if (idGetter == null) {
+        hoarderLogger.error(
+            HoarderInitializer.class,
+            "ID getter not found for class during refresh: {}",
+            clazz.getSimpleName());
+        return;
+      }
+
+      hoarderCache.clearForEntity(clazz);
+
+      hoarderCache.preload(
+          clazz,
+          result,
+          entity -> {
+            try {
+              return idGetter.invoke(entity);
+            } catch (Exception e) {
+              throw new RuntimeException(
+                  "Failed to invoke ID getter for entity during refresh: " + clazz.getSimpleName(),
+                  e);
+            }
+          });
+
+      hoarderLogger.debug(
+          HoarderInitializer.class,
+          "Successfully refreshed {} entities for class: {}",
+          result.size(),
+          clazz.getSimpleName());
+
+    } catch (Exception e) {
+      hoarderLogger.error(
+          HoarderInitializer.class,
+          "Failed to refresh entities for class: {}, Error: {}",
+          clazz.getSimpleName(),
+          e.getMessage());
+    }
   }
 
   private void preloadEntity(Class<?> clazz) {
@@ -61,7 +181,7 @@ public class HoarderInitializer {
           HoarderInitializer.class, "Preloading entities for class: {}", clazz.getSimpleName());
 
       List<?> result = entityManager.createQuery(jpql, clazz).getResultList();
-      Method idGetter = findIdGetter(clazz);
+      Method idGetter = idGetterCache.computeIfAbsent(clazz, this::findIdGetter);
 
       if (idGetter == null) {
         hoarderLogger.error(

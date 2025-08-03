@@ -13,6 +13,14 @@ public class HoarderProperties {
   @Data
   public static class Cache {
     private boolean enabled = true;
+    private Refresh refresh = new Refresh();
+
+    @Data
+    public static class Refresh {
+      private boolean enabled = false;
+      private long intervalMinutes = 60; // Default 1 hour
+      private long delayMinutes = 60; // Initial delay before first refresh
+    }
   }
 
   @Data

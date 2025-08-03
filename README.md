@@ -20,22 +20,24 @@ reducing database queries.
 ### Maven
 
 ```xml
+
 <dependency>
     <groupId>com.github.hoarder</groupId>
     <artifactId>hoarder-spring-boot-starter</artifactId>
-    <version>0.0.3</version>
+    <version>0.0.4</version>
 </dependency>
 ```
 
 ### Gradle
 
 ```groovy
-implementation 'com.github.hoarder:hoarder-spring-boot-starter:0.0.3'
+implementation 'com.github.hoarder:hoarder-spring-boot-starter:0.0.4'
 ```
 
 Add this to your `pom.xml` or `build.gradle` file to include the Hoarder Spring Boot Starter in your project.
 
 ```xml
+
 <repositories>
     <repository>
         <id>github</id>
@@ -51,6 +53,7 @@ Add this to your `pom.xml` or `build.gradle` file to include the Hoarder Spring 
 Annotate your JPA entity with `@Hoarded`:
 
 ```java
+
 @Entity
 @Table(name = "periodic_table")
 @Hoarded
@@ -77,6 +80,7 @@ public class Element {
 Create a standard Spring Data JPA repository:
 
 ```java
+
 @Repository
 public interface ElementRepository extends JpaRepository<Element, Integer> {
 
@@ -97,6 +101,7 @@ public interface ElementRepository extends JpaRepository<Element, Integer> {
 Use the repository in your service or controller:
 
 ```java
+
 @Service
 public class ElementService {
 
@@ -167,6 +172,59 @@ hoarder:
 hoarder.cache.enabled=true
 hoarder.logging.enabled=true
 hoarder.logging.level=INFO
+```
+
+## Cache Refresh
+
+Hoarder supports automatic cache refresh to keep cached entities synchronized with the database. This is useful for
+scenarios where data might be modified outside your application.
+
+### Configuration
+
+```yaml
+hoarder:
+  cache:
+    enabled: true
+    refresh:
+      enabled: true           # Enable automatic cache refresh
+      intervalMinutes: 60     # Refresh every 60 minutes
+      delayMinutes: 60        # Initial delay before first refresh
+```
+
+```properties
+hoarder.cache.refresh.enabled=true
+hoarder.cache.refresh.intervalMinutes=60
+hoarder.cache.refresh.delayMinutes=60
+```
+
+### How it Works
+
+When cache refresh is enabled:
+
+- **Scheduled Execution**: A background scheduler runs at the configured interval.
+- **Entity Detection**: Only entities annotated with `@Hoarded` and currently cached are refreshed.
+- **Atomic Refresh**: For each entity type, the cache is cleared and reloaded with fresh data from the database.
+- **Error Handling**: Refresh failures are logged but do not affect application functionality.
+
+### Manual Cache Management
+
+You can also manually manage the cache using the HoarderCache bean:
+
+```java
+@Autowired
+private HoarderCache hoarderCache;
+
+// Clear all cached entities
+hoarderCache.clear();
+
+// Clear cache for a specific entity
+hoarderCache.clearForEntity(Element.class);
+
+// Check cache status
+hoarderCache.printCacheStatus();
+
+// View detailed cache contents
+hoarderCache.printCacheDetails();
 ```
 
 ## Best Practices

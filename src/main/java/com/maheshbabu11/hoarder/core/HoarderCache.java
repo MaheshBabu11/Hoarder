@@ -45,6 +45,18 @@ public class HoarderCache {
 
   public void clear() {
     CACHE.clear();
+    hoarderLogger.info(HoarderCache.class, "Cleared all cached entities");
+  }
+
+  public void clearForEntity(Class<?> clazz) {
+    Map<Object, Object> entityMap = CACHE.remove(clazz);
+    if (entityMap != null) {
+      hoarderLogger.debug(
+          HoarderCache.class,
+          "Cleared {} cached entities for class: {}",
+          entityMap.size(),
+          clazz.getSimpleName());
+    }
   }
 
   public void printCacheStatus() {
@@ -89,5 +101,4 @@ public class HoarderCache {
       }
     }
   }
-
 }
