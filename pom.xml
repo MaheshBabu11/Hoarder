@@ -6,7 +6,7 @@
 
     <groupId>com.maheshbabu11</groupId>
     <artifactId>hoarder-spring-boot-starter</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
     <packaging>jar</packaging>
     <name>hoarder-spring-boot-starter</name>
     <description>A Spring Boot starter for caching JPA entities</description>
@@ -39,6 +39,8 @@
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.release>17</maven.compiler.release>
         <spring-boot.version>3.2.0</spring-boot.version>
+        <spring-aspects.version>6.1.0</spring-aspects.version>
+        <lombok.version>1.18.38</lombok.version>
     </properties>
 
     <distributionManagement>
@@ -63,13 +65,18 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-aspects</artifactId>
-            <version>6.1.0</version>
+            <version>${spring-aspects.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <version>${spring-boot.version}</version>
             <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
         </dependency>
     </dependencies>
 

@@ -73,7 +73,6 @@ public class HoarderAspect {
     hoarderLogger.debug(
         HoarderAspect.class, "Intercepted findById call for entity class: {}", entityClassName);
 
-    // Check if this entity class is hoarded
     Class<?> entityClass = hoardedEntityCache.get(entityClassName);
     if (entityClass == null) {
       hoarderLogger.debug(

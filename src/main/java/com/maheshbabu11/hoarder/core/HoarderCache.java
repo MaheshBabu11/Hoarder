@@ -2,7 +2,6 @@ package com.maheshbabu11.hoarder.core;
 
 import com.maheshbabu11.hoarder.config.HoarderProperties;
 import com.maheshbabu11.hoarder.util.HoarderLogger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -91,7 +90,4 @@ public class HoarderCache {
     }
   }
 
-  public HoarderProperties getProperties() {
-    return properties;
-  }
 }
